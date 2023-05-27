@@ -18,7 +18,9 @@ import java.awt.print.Pageable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -32,20 +34,11 @@ public class WorkerServiceImpl implements IWorkerService {
 
 
     @Override
-    public WorkerResponseDTO startWorker(String workerId) throws WorkerException {
+    public WorkerResponseDTO updateWorkerStatus(String workerId, ContainerStatus newStatus) throws WorkerException {
+        validateWorkerId(workerId);
         Worker worker = fetchAndPersistWorkerInfo(workerId);
-        if (!worker.getStatus().equals(ContainerStatus.running)) {
-            dockerClientUtils.startContainer(workerId);
-            worker = fetchAndPersistWorkerInfo(workerId);
-        }
-        return WorkerMapper.toWorkerResponseDTO(worker);
-    }
-
-    @Override
-    public WorkerResponseDTO stopWorker(String workerId) throws WorkerException {
-        Worker worker = fetchAndPersistWorkerInfo(workerId);
-        if (!worker.getStatus().equals(ContainerStatus.paused)) {
-            dockerClientUtils.stopContainer(workerId);
+        boolean updated = executeWorkerWithStatus(newStatus, workerId, worker.getStatus());
+        if (updated) {
             worker = fetchAndPersistWorkerInfo(workerId);
         }
         return WorkerMapper.toWorkerResponseDTO(worker);
@@ -53,6 +46,7 @@ public class WorkerServiceImpl implements IWorkerService {
 
     @Override
     public WorkerResponseDTO getWorkerInformation(String workerId) throws WorkerException {
+        validateWorkerId(workerId);
         Worker worker = fetchAndPersistWorkerInfo(workerId);
         return WorkerMapper.toWorkerResponseDTO(worker);
     }
@@ -87,6 +81,7 @@ public class WorkerServiceImpl implements IWorkerService {
 
     @Override
     public WorkerStatsResponseDTO getWorkerStatistics(String workerId) throws WorkerException {
+        validateWorkerId(workerId);
         Statistics stats = dockerClientUtils.getContainerStatistics(workerId);
         WorkerStatsResponseDTO workerStats = WorkerMapper.toWorkerStatsResponse(stats);
         workerStats.setWorkerId(workerId);
@@ -104,6 +99,29 @@ public class WorkerServiceImpl implements IWorkerService {
     }
 
     private void validateWorkerId(String workerId) throws WorkerException {
-
+        if (StringUtils.isEmpty(workerId) 
+            || workerId.length() != 64 
+            || !Pattern.matches("^[0-9a-z]{64}$", workerId)) {
+            throw new WorkerException(
+                WorkerErrorDetail.builder()
+                    .errorMessage("error")
+                    .errorCode("1234").build());
+        }
+    }
+    
+    private boolean executeWorkerWithStatus(
+        ContainerStatus status, String workerId, ContainerStatus currentStatus) {
+        if (currentStatus.equals(status)) {
+            return false;
+        }
+        switch (status) {
+            case running:
+                dockerClientUtils.stopContainer(workerId);
+                return true;
+            case paused:
+                dockerClientUtils.startContainer(workerId);
+                return true;
+        }
+        return false;
     }
 }
