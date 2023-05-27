@@ -61,3 +61,15 @@ logging:
 node:
   api:
     path: /api/v1
+
+docker-config:
+  dockerHost:
+  tlsVerificationRequired:
+  dockerCertPath:
+  registryUsername:
+  registryPassword:
+  registryMail:
+  registryUrl:
+  dockerClientMaxConnections:
+  dockerClientConnectionTimeout:
+  dockerClientResponseTimeout:

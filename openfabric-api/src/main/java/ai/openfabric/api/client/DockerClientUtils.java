@@ -1,5 +1,6 @@
 package ai.openfabric.api.client;
 
+import ai.openfabric.api.config.DockerConfig;
 import ai.openfabric.api.exceptions.WorkerErrorDetail;
 import ai.openfabric.api.exceptions.WorkerException;
 import ai.openfabric.api.model.Worker;
@@ -12,7 +13,6 @@ import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.core.InvocationBuilder;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import com.github.dockerjava.transport.DockerHttpClient;
-
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
@@ -20,8 +20,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 
 public class DockerClientUtils {
+
+    @Autowired DockerConfig dockerConfig;
     
     private static DockerClientUtils client;
     private static com.github.dockerjava.api.DockerClient dockerClient; // for docker command execution.
@@ -64,8 +67,7 @@ public class DockerClientUtils {
             callback.close();
         } catch (RuntimeException | IOException e) {
             throw new WorkerException(
-                WorkerErrorDetail.builder().build(), 500
-            );
+                WorkerErrorDetail.builder().build(), 500);
         }
         return stats;
     }
@@ -86,21 +88,25 @@ public class DockerClientUtils {
         return new ApacheDockerHttpClient.Builder()
             .dockerHost(configuration.getDockerHost())
             .sslConfig(configuration.getSSLConfig())
-            .maxConnections(100)
-            .connectionTimeout(Duration.ofSeconds(30))
-            .responseTimeout(Duration.ofSeconds(45))
+            .maxConnections(dockerConfig.getDockerClientMaxConnections())
+            .connectionTimeout(Duration.ofSeconds(dockerConfig.getDockerClientConnectionTimeout()))
+            .responseTimeout(Duration.ofSeconds(dockerConfig.getDockerClientResponseTimeout()))
             .build();
     }
     
     private DockerClientConfig getDefaultClientConfiguration() {
-         return DefaultDockerClientConfig.createDefaultConfigBuilder()
-            .withDockerHost("tcp://docker.somewhere.tld:2376")
-            .withDockerTlsVerify(true)
-            .withDockerCertPath("/home/user/.docker")
-            .withRegistryUsername(registryUser)
-            .withRegistryPassword(registryPass)
-            .withRegistryEmail(registryMail)
-            .withRegistryUrl(registryUrl)
-            .build();
+        return getClientConfiguration(dockerConfig);
+    }
+    
+    private DockerClientConfig getClientConfiguration(DockerConfig dockerConfig) {
+    return DefaultDockerClientConfig.createDefaultConfigBuilder()
+        .withDockerHost(dockerConfig.getDockerHost())
+        .withDockerTlsVerify(dockerConfig.isTlsVerificationRequired())
+        .withDockerCertPath(dockerConfig.getDockerCertPath())
+        .withRegistryUsername(dockerConfig.getRegistryUsername())
+        .withRegistryPassword(dockerConfig.getRegistryPassword())
+        .withRegistryEmail(dockerConfig.getRegistryMail())
+        .withRegistryUrl(dockerConfig.getRegistryUrl())
+        .build();
     }
 }
